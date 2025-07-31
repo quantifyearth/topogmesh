@@ -1,0 +1,16 @@
+Third-party libraries used in topogmesh:
+
+NumPy — BSD 3-Clause License
+https://numpy.org/license.html
+
+lib3mf — BSD 2-Clause License
+https://github.com/3MFConsortium/lib3mf/blob/master/LICENSE
+
+GDAL — MIT License
+https://github.com/OSGeo/gdal/blob/master/LICENSE.TXT
+
+Yirgacheffe — ISC License
+https://github.com/quantifyearth/yirgacheffe/blob/master/LICENSE
+
+scikit-image — BSD 3-Clause License  
+https://scikit-image.org/docs/stable/license.html

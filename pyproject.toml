@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "topogmesh"
+version = "0.1.0"
+description = "Generate 3D print files from .tif files"
+authors = [
+    { name = "Finley Stirk", email = "fs618@cam.ac.uk" }
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+
+dependencies = [
+    "lib3mf",
+    "numpy",
+    "gdal",
+    "yirgacheffe",
+    "scikit-image"
+]
+
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
+]
