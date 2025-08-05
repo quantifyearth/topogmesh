@@ -1,3 +1,9 @@
 .DS_Store
 .vscode
 __pycache__
+dist/
+*.whl
+*.tar.gz
+build/
+topogmesh.egg-info/
+tests

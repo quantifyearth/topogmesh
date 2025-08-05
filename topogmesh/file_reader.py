@@ -1,5 +1,6 @@
 from osgeo import ogr
 import numpy as np
+from yirgacheffe.layers import TiledGroupLayer, RasterLayer
 
 def read_polygon(path) -> np.ndarray[tuple[float, float]]:
     """
@@ -38,3 +39,15 @@ def read_polygon(path) -> np.ndarray[tuple[float, float]]:
                     coords.append([float(pt[0]), float(pt[1])])
     
     return np.array(coords)
+
+def read_tifs(tif_paths: list[str]) -> TiledGroupLayer:
+    rasters = []
+    for path in tif_paths:
+        raster = read_tif(path)
+        rasters.append(raster)
+    group_rasters = TiledGroupLayer(rasters)
+    return group_rasters
+
+def read_tif(tif_path: str) -> RasterLayer:
+    raster = RasterLayer.layer_from_file(tif_path)
+    return raster

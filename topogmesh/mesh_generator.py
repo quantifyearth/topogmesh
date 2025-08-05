@@ -1,9 +1,8 @@
 import numpy as np
-from .file_reader import read_polygon
-from .hm_utils import get_bounding_box, compress, get_area
+from .file_reader import read_polygon, read_tifs, read_tif
+from .hm_utils import get_bounding_box, compress, get_area, get_shape
 from skimage.draw import polygon2mask
 from .mesh import Mesh, Vertex, Triangle
-from yirgacheffe.layers import TiledGroupLayer, RasterLayer
 
 
 def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
@@ -120,10 +119,10 @@ def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
                         tris.append(Triangle(curr_top, curr_bot, down_top))
                         tris.append(Triangle(down_top, curr_bot, down_bot))
 
-    return Mesh(verts, tris, dimensions=(x_size * scale, y_size * scale))
+    return Mesh(verts, tris)
 
 
-def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float, scale: float = 1, compression_factor: float = 1) -> Mesh:
+def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float = 1, scale: float = 1, compression_factor: float = 1) -> Mesh:
     """
     Generate a 3D terrain mesh from a shapefile and one or more raster tiles.
 
@@ -153,11 +152,8 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float
     """
     polygon = read_polygon(shp_path)
     area = get_area(polygon)
-
-    rasters = []
-    for path in tif_paths:
-        rasters.append(RasterLayer.layer_from_file(path))
-    group_rasters = TiledGroupLayer(rasters)
+    
+    group_rasters = read_tifs(tif_paths)
     group_rasters.set_window_for_intersection(area)
 
     # PIXEL_SCALE indicates the physical distance in metres between vertices 
@@ -170,12 +166,26 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float
 
     x, y, width, height = get_bounding_box(vertex_indexes)
 
-    height_map = group_rasters.read_array(0, 0, width, height)
+    height_map = group_rasters.read_array(0, 0, width, height).astype(float)
     height_map = height_map[y:y+height, x:x+width]
     
     mask = polygon2mask((height, width), vertex_indexes[:, [1, 0]])
     height_map[~mask] = np.nan
 
+    height_map /= PIXEL_SCALE
+    height_map += base_height - np.nanmin(height_map)
+
+    compressed_height_map = compress(height_map, compression_factor)
+
+    return create_mesh(compressed_height_map, scale)
+
+def mesh_from_tif(tif_path: str, base_height: float = 1, scale: float = 1, compression_factor: float = 1) -> Mesh:
+    raster = read_tif(tif_path)
+
+    width, height = get_shape(raster)
+    height_map = raster.read_array(0, 0, width, height).astype(float)
+
+    PIXEL_SCALE = 111_111 * np.mean(np.abs(raster.pixel_scale))
     height_map /= PIXEL_SCALE
     height_map += base_height - np.nanmin(height_map)
 

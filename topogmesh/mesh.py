@@ -81,10 +81,9 @@ class Mesh:
     scale(factor: float)
         Scale all vertex coordinates and update mesh dimensions by the factor.
     """
-    def __init__(self, vertices: list[Vertex], triangles: list[Triangle], dimensions):
+    def __init__(self, vertices: list[Vertex], triangles: list[Triangle]):
         self._vertices = vertices
         self._triangles = triangles
-        self._dimensions = dimensions
 
     def __repr__(self):
         return f"Mesh(Vertices: {self._vertices}, Triangles: {self._triangles}, Dimensions: {self._dimensions})"
