@@ -66,25 +66,6 @@ def get_bounding_box(indexes: np.ndarray[tuple[int, int]]) -> tuple[int, int, in
     return xs.min(), ys.min(), width, height
 
 
-def get_shape(group: GroupLayer):
-    """
-    Get the pixel dimensions of a group layer.
-
-    Parameters
-    ----------
-    group : GroupLayer
-        A group of raster layers.
-
-    Returns
-    -------
-    tuple of int
-        (x_size, y_size) pixel dimensions of the group layer.
-    """
-    bottom = group.area.bottom
-    right = group.area.right
-    return group.pixel_for_latlng(bottom, right)
-
-
 def get_area(polygon: np.ndarray[tuple[float, float]]) -> Area:
     """
     Compute the geographic area covered by a polygon.

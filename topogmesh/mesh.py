@@ -86,7 +86,7 @@ class Mesh:
         self._triangles = triangles
 
     def __repr__(self):
-        return f"Mesh(Vertices: {self._vertices}, Triangles: {self._triangles}, Dimensions: {self._dimensions})"
+        return f"Mesh(Vertices: {self._vertices}, Triangles: {self._triangles})"
     
     def scale_height(self, factor: float):
         for vertex in self._vertices:

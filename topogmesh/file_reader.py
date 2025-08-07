@@ -1,44 +1,11 @@
-from osgeo import ogr
 import numpy as np
-from yirgacheffe.layers import TiledGroupLayer, RasterLayer
+from yirgacheffe.layers import TiledGroupLayer, RasterLayer, VectorLayer
+import yirgacheffe.operators as yo
 
-def read_polygon(path) -> np.ndarray[tuple[float, float]]:
-    """
-    Read the outer boundary coordinates from a shapefile polygon or multipolygon.
-
-    Opens the specified shapefile, extracts the first ring of each polygon or
-    multipolygon, and returns the coordinates as a NumPy array of (x, y) pairs.
-
-    Parameters
-    ----------
-    path : str
-        Path to the input shapefile (.shp).
-
-    Returns
-    -------
-    np.ndarray of shape (N, 2)
-        Array of polygon coordinates as floats in (x, y) order.
-    """
-    ds = ogr.Open(path)
-    layer = ds.GetLayer()
-    coords = []
-
-    for feature in layer:
-        geom = feature.GetGeometryRef()
-
-        if geom.GetGeometryType() == ogr.wkbPolygon:
-            ring = geom.GetGeometryRef(0)
-            for pt in ring.GetPoints():
-                coords.append([float(pt[0]), float(pt[1])])
-
-        elif geom.GetGeometryType() == ogr.wkbMultiPolygon:
-            for i in range(geom.GetGeometryCount()):
-                poly = geom.GetGeometryRef(i)
-                ring = poly.GetGeometryRef(0)
-                for pt in ring.GetPoints():
-                    coords.append([float(pt[0]), float(pt[1])])
-    
-    return np.array(coords)
+def read_geojson(path, reference_raster) -> np.ndarray[tuple[float, float]]:
+    polygon_layer = VectorLayer.layer_from_file_like(path, other_layer=reference_raster)
+    polygon_layer = yo.where(polygon_layer == 0, np.nan, polygon_layer)
+    return polygon_layer
 
 def read_tifs(tif_paths: list[str]) -> TiledGroupLayer:
     rasters = []

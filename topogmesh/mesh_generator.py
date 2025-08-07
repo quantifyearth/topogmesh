@@ -1,8 +1,8 @@
 import numpy as np
-from .file_reader import read_polygon, read_tifs, read_tif
-from .hm_utils import get_bounding_box, compress, get_area, get_shape
-from skimage.draw import polygon2mask
+from .file_reader import read_tifs, read_tif, read_geojson
+from .hm_utils import compress
 from .mesh import Mesh, Vertex, Triangle
+from yirgacheffe.layers import RasterLayer
 
 
 def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
@@ -133,7 +133,7 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float
     Parameters
     ----------
     shp_path : str
-        Path to the input shapefile (.shp) containing the polygon boundary.
+        Path to the input shapefile (.geojson) containing the polygon boundary.
     tif_paths : list of str
         List of paths to GeoTIFF (.tif) raster files containing elevation data.
     base_height : float
@@ -150,31 +150,24 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float
     Mesh
         A Mesh object representing the extracted terrain.
     """
-    polygon = read_polygon(shp_path)
-    area = get_area(polygon)
-    
     group_rasters = read_tifs(tif_paths)
-    group_rasters.set_window_for_intersection(area)
+    polygon_layer = read_geojson(shp_path, group_rasters)
 
-    # PIXEL_SCALE indicates the physical distance in metres between vertices 
-    PIXEL_SCALE = 111_111 * np.mean(np.abs(group_rasters.pixel_scale))
+    mask_operation = polygon_layer * group_rasters
+    masked_rasters = RasterLayer.empty_raster_layer_like(polygon_layer)
+    mask_operation.save(masked_rasters)
     
-    vertex_indexes = np.array([
-        group_rasters.pixel_for_latlng(lat, lon)
-        for lon, lat in polygon
-    ])
+    height_map = masked_rasters.read_array(
+        masked_rasters.window.xoff,
+        masked_rasters.window.yoff,
+        masked_rasters.window.xsize,
+        masked_rasters.window.ysize
+    ).astype(float)
 
-    x, y, width, height = get_bounding_box(vertex_indexes)
+    HEIGHT_SCALE = 111_111 * np.mean(np.abs(group_rasters.pixel_scale))
 
-    height_map = group_rasters.read_array(0, 0, width, height).astype(float)
-    height_map = height_map[y:y+height, x:x+width]
-    
-    mask = polygon2mask((height, width), vertex_indexes[:, [1, 0]])
-    height_map[~mask] = np.nan
-
-    height_map /= PIXEL_SCALE
+    height_map /= HEIGHT_SCALE
     height_map += base_height - np.nanmin(height_map)
-
     compressed_height_map = compress(height_map, compression_factor)
 
     return create_mesh(compressed_height_map, scale)
@@ -182,8 +175,12 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float
 def mesh_from_tif(tif_path: str, base_height: float = 1, scale: float = 1, compression_factor: float = 1) -> Mesh:
     raster = read_tif(tif_path)
 
-    width, height = get_shape(raster)
-    height_map = raster.read_array(0, 0, width, height).astype(float)
+    height_map = raster.read_array(
+        raster.window.xoff,
+        raster.window.yoff,
+        raster.window.xsize,
+        raster.window.ysize
+    ).astype(float)
 
     PIXEL_SCALE = 111_111 * np.mean(np.abs(raster.pixel_scale))
     height_map /= PIXEL_SCALE
