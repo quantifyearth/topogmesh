@@ -44,3 +44,6 @@ def main():
         )
         topogmesh.export_mesh_to_3mf(mesh, args.output)
         print(f"Mesh saved to {args.output}")
+
+if __name__ == "__main__":
+    main()
