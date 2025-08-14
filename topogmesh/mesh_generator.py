@@ -1,7 +1,8 @@
 import numpy as np
-from .file_reader import read_tifs, read_tif, read_geojson
 from .hm_utils import compress
 from .mesh import Mesh, Vertex, Triangle
+import yirgacheffe as yg
+import yirgacheffe.operators as yo
 from yirgacheffe.layers import RasterLayer
 
 
@@ -33,14 +34,14 @@ def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
             if valid[i, j]:
                 vert_idx[i, j] = len(verts)
                 verts.append(Vertex(i * scale, j * scale, height_map[i, j] * scale))
-    
+
     base_offset = len(verts)
     # base vertices
     for i in range(x_size):
         for j in range(y_size):
             if valid[i, j]:
                 verts.append(Vertex(i * scale, j * scale, 0))
-    
+
 
     tris = []
     # surface triangles
@@ -70,10 +71,10 @@ def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
         for j in range(y_size):
             if not valid[i, j]:
                 continue
-                
+
             curr_top = vert_idx[i, j]
             curr_bot = base_offset + curr_top
-            
+
             # Check each direction for boundary walls
             # Right edge
             if i < x_size-1 and valid[i+1, j]:
@@ -83,7 +84,7 @@ def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
                     need_wall = True
                 elif j == y_size-1 or not valid[i, j+1] or not valid[i+1, j+1]:
                     need_wall = True
-                
+
                 if need_wall:
                     right_top = vert_idx[i+1, j]
                     right_bot = base_offset + right_top
@@ -96,8 +97,8 @@ def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
                         # Wall faces toward positive j (down)
                         tris.append(Triangle(curr_top, right_top, curr_bot))
                         tris.append(Triangle(right_top, right_bot, curr_bot))
-            
-            # Down edge  
+
+            # Down edge
             if j < y_size-1 and valid[i, j+1]:
                 # Check if we need a wall between these cells
                 need_wall = False
@@ -105,7 +106,7 @@ def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
                     need_wall = True
                 elif i == x_size-1 or not valid[i+1, j] or not valid[i+1, j+1]:
                     need_wall = True
-                
+
                 if need_wall:
                     down_top = vert_idx[i, j+1]
                     down_bot = base_offset + down_top
@@ -126,8 +127,8 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float
     """
     Generate a 3D terrain mesh from a shapefile and one or more raster tiles.
 
-    The shapefile defines the polygon region to extract, and the raster tiles 
-    provide the elevation data. The resulting mesh includes a flat base at the 
+    The shapefile defines the polygon region to extract, and the raster tiles
+    provide the elevation data. The resulting mesh includes a flat base at the
     specified base height and side walls around the polygon mask.
 
     Parameters
@@ -137,7 +138,7 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float
     tif_paths : list of str
         List of paths to GeoTIFF (.tif) raster files containing elevation data.
     base_height : float
-        The base level of the mesh in mm. The lowest elevation in the 
+        The base level of the mesh in mm. The lowest elevation in the
         polygon will be shifted so that its minimum is at this value.
     scale : float, optional
         Distance between adjacent vertices in model units. Default is 1.
@@ -150,13 +151,15 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float
     Mesh
         A Mesh object representing the extracted terrain.
     """
-    group_rasters = read_tifs(tif_paths)
-    polygon_layer = read_geojson(shp_path, group_rasters)
+
+    group_rasters = yg.read_rasters(tif_paths)
+    raw_polygon_layer = yg.read_shape_like(shp_path, group_rasters)
+    polygon_layer = yo.where(raw_polygon_layer == 0, np.nan, raw_polygon_layer)
 
     mask_operation = polygon_layer * group_rasters
     masked_rasters = RasterLayer.empty_raster_layer_like(polygon_layer)
     mask_operation.save(masked_rasters)
-    
+
     height_map = masked_rasters.read_array(
         masked_rasters.window.xoff,
         masked_rasters.window.yoff,
@@ -173,7 +176,7 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float
     return create_mesh(compressed_height_map, scale)
 
 def mesh_from_tif(tif_path: str, base_height: float = 1, scale: float = 1, compression_factor: float = 1) -> Mesh:
-    raster = read_tif(tif_path)
+    raster = yg.read_raster(tif_path)
 
     height_map = raster.read_array(
         raster.window.xoff,
