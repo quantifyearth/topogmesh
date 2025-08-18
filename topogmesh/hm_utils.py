@@ -1,5 +1,4 @@
 import numpy as np
-from yirgacheffe.layers import GroupLayer
 from yirgacheffe.window import Area
 import math
 
@@ -28,10 +27,10 @@ def compress(height_map: np.ndarray, scale: float) -> np.ndarray:
     y_size = max(1, int(round(height_map.shape[1] * scale)))
 
     compressed_height_map = np.ndarray((x_size, y_size))
-    
+
     scale_x = height_map.shape[0] / x_size
     scale_y = height_map.shape[1] / y_size
-    
+
     for x in range(x_size):
         start_x = int(x * scale_x)
         end_x = int((x + 1) * scale_x)
@@ -41,7 +40,7 @@ def compress(height_map: np.ndarray, scale: float) -> np.ndarray:
             area = height_map[start_x:end_x, start_y:end_y]
             avg_height = np.nanmean(area) if not np.all(np.isnan(area)) else np.nan
             compressed_height_map[x, y] = avg_height
-    
+
     return compressed_height_map
 
 
