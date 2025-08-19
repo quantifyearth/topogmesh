@@ -1,6 +1,6 @@
 import numpy as np
-from yirgacheffe.window import Area
-import math
+from yirgacheffe.layers import RasterLayer, VectorLayer
+import yirgacheffe.operators as yo
 
 def compress(height_map: np.ndarray, scale: float) -> np.ndarray:
     """
@@ -44,73 +44,42 @@ def compress(height_map: np.ndarray, scale: float) -> np.ndarray:
     return compressed_height_map
 
 
-def get_bounding_box(indexes: np.ndarray[tuple[int, int]]) -> tuple[int, int, int, int]:
+def read_full_layer(raster: RasterLayer, dtype: type = float) -> RasterLayer:
     """
-    Compute the bounding box for a set of pixel indexes.
+    Return the entire contents of a RasterLayer based on the specifications 
+    of its window.
 
     Parameters
     ----------
-    indexes : np.ndarray of shape (N, 2)
-        Array of (x, y) pixel coordinates.
+    raster : RasterLayer
+        A yirgacheffe raster layer
+    dtype : type
+        The typing of the contents of the array e.g. float or bool
 
     Returns
     -------
-    tuple of int
-        (min_x, min_y, width, height) of the bounding box in pixel units.
+    np.ndarray
+        The entire contents of the RasterLayer within its window.
     """
-    xs = indexes[:, 0]
-    ys = indexes[:, 1]
-    width = xs.max() - xs.min() + 1
-    height = ys.max() - ys.min() + 1
-    return xs.min(), ys.min(), width, height
+    array = raster.read_array(
+        raster.window.xoff,
+        raster.window.yoff,
+        raster.window.xsize,
+        raster.window.ysize
+    ).astype(dtype)
+    return array
 
+def normalise(height_map: np.ndarray, base_height: float, max_height: float):
+    zeroed_height_map = height_map + base_height - np.nanmin(height_map)
+    normalised_height_map = zeroed_height_map / np.nanmax(zeroed_height_map) * max_height
+    return normalised_height_map
 
-def get_area(polygon: np.ndarray[tuple[float, float]]) -> Area:
-    """
-    Compute the geographic area covered by a polygon.
+def apply_mask(raster: RasterLayer, mask: VectorLayer, mask_with_nans: bool = True) -> RasterLayer:
+    if mask_with_nans:
+        mask = yo.where(mask == 0, np.nan, mask)
 
-    Parameters
-    ----------
-    polygon : np.ndarray of shape (N, 2)
-        Array of (x, y) coordinates defining the polygon vertices.
+    mask_operation = raster * mask
+    masked_raster = RasterLayer.empty_raster_layer_like(mask)
+    mask_operation.save(masked_raster)
 
-    Returns
-    -------
-    Area
-        An Area object with left, top, right, and bottom boundaries in the
-        same coordinate reference system as the polygon.
-    """
-    left = polygon[:, 0].min().item()
-    right = polygon[:, 0].max().item()
-    bottom = polygon[:, 1].min().item()
-    top = polygon[:, 1].max().item()
-    return Area(left, top, right, bottom)
-
-
-def tiles_needed(polygon: np.ndarray[tuple[int, int]]) -> list[str]:
-    """
-    Get the names of the tiles (latitude/longitude) required to construct a mesh for the given polygon.
-
-    Parameters
-    ----------
-    polygon : np.ndarray of shape (N, 2)
-        Array of (x, y) coordinates defining the polygon vertices.
-
-    list of str
-        A list of tile names covering the polygon's bounding box.
-    """
-    lons = [lon for lon, lat in polygon]
-    lats = [lat for lon, lat in polygon]
-    min_lon, max_lon = math.floor(min(lons)), math.ceil(max(lons))
-    min_lat, max_lat = math.floor(min(lats)), math.ceil(max(lats))
-
-    def get_tile_name(lon: int, lat: int) -> str:
-        ns = 'N' if lat >= 0 else 'S'
-        ew = 'E' if lon >= 0 else 'W'
-        return f'{ns}{abs(int(lat)):02}{ew}{abs(int(lon)):03}'
-
-    tiles = []
-    for lon in range(min_lon, max_lon + 1):
-        for lat in range(min_lat, max_lat + 1):
-            tiles.append(get_tile_name(lon, lat))
-    return tiles
+    return masked_raster

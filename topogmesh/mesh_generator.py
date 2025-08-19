@@ -1,9 +1,10 @@
 import numpy as np
-from .hm_utils import compress
+from .hm_utils import compress, normalise, read_full_layer, apply_mask
+from .geo_utils import to_utm
 from .mesh import Mesh, Vertex, Triangle
 import yirgacheffe as yg
 import yirgacheffe.operators as yo
-from yirgacheffe.layers import RasterLayer
+from yirgacheffe.layers import RasterLayer, GroupLayer
 
 
 def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
@@ -33,7 +34,7 @@ def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
         for j in range(y_size):
             if valid[i, j]:
                 vert_idx[i, j] = len(verts)
-                verts.append(Vertex(i * scale, j * scale, height_map[i, j] * scale))
+                verts.append(Vertex(i * scale, j * scale, height_map[i, j]))
 
     base_offset = len(verts)
     # base vertices
@@ -123,7 +124,7 @@ def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
     return Mesh(verts, tris)
 
 
-def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float = 1, scale: float = 1, compression_factor: float = 1) -> Mesh:
+def mesh_from_shape_file(shp_path: str, tif_paths: list[str], max_height: float, max_length: float, base_height: float = 1, compression_factor: float = 1) -> Mesh:
     """
     Generate a 3D terrain mesh from a shapefile and one or more raster tiles.
 
@@ -151,44 +152,29 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], base_height: float
     Mesh
         A Mesh object representing the extracted terrain.
     """
-
     group_rasters = yg.read_rasters(tif_paths)
-    raw_polygon_layer = yg.read_shape_like(shp_path, group_rasters)
-    polygon_layer = yo.where(raw_polygon_layer == 0, np.nan, raw_polygon_layer)
+    polygon_layer = yg.read_shape_like(shp_path, group_rasters)
 
-    mask_operation = polygon_layer * group_rasters
-    masked_rasters = RasterLayer.empty_raster_layer_like(polygon_layer)
-    mask_operation.save(masked_rasters)
+    masked_rasters = apply_mask(group_rasters, polygon_layer)
+    utm_rasters = to_utm(masked_rasters)
 
-    height_map = masked_rasters.read_array(
-        masked_rasters.window.xoff,
-        masked_rasters.window.yoff,
-        masked_rasters.window.xsize,
-        masked_rasters.window.ysize
-    ).astype(float)
+    height_map = read_full_layer(utm_rasters)
 
-    HEIGHT_SCALE = 111_111 * np.mean(np.abs(group_rasters.pixel_scale))
-
-    height_map /= HEIGHT_SCALE
-    height_map += base_height - np.nanmin(height_map)
-    compressed_height_map = compress(height_map, compression_factor)
+    normalised_height_map = normalise(height_map, base_height, max_height)
+    compressed_height_map = compress(normalised_height_map, compression_factor)
+    
+    scale = max_length / max(compressed_height_map.shape)
 
     return create_mesh(compressed_height_map, scale)
 
-def mesh_from_tif(tif_path: str, base_height: float = 1, scale: float = 1, compression_factor: float = 1) -> Mesh:
+def mesh_from_tif(tif_path: str, max_height: float, max_length: float, base_height: float = 1, compression_factor: float = 1) -> Mesh:
     raster = yg.read_raster(tif_path)
 
-    height_map = raster.read_array(
-        raster.window.xoff,
-        raster.window.yoff,
-        raster.window.xsize,
-        raster.window.ysize
-    ).astype(float)
+    height_map = read_full_layer(raster)
 
-    PIXEL_SCALE = 111_111 * np.mean(np.abs(raster.pixel_scale))
-    height_map /= PIXEL_SCALE
-    height_map += base_height - np.nanmin(height_map)
+    normalised_height_map = normalise(height_map, base_height, max_height)
+    compressed_height_map = compress(normalised_height_map, compression_factor)
 
-    compressed_height_map = compress(height_map, compression_factor)
+    scale = max_length / max(compressed_height_map.shape)
 
     return create_mesh(compressed_height_map, scale)
