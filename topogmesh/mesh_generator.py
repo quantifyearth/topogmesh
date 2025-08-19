@@ -155,10 +155,10 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], max_height: float,
     group_rasters = yg.read_rasters(tif_paths)
     polygon_layer = yg.read_shape_like(shp_path, group_rasters)
 
-    masked_rasters = apply_mask(group_rasters, polygon_layer)
-    utm_rasters = to_utm(masked_rasters)
+    utm_rasters = to_utm(group_rasters)
+    masked_rasters = apply_mask(utm_rasters, polygon_layer)
 
-    height_map = read_full_layer(utm_rasters)
+    height_map = read_full_layer(masked_rasters)
 
     normalised_height_map = normalise(height_map, base_height, max_height)
     compressed_height_map = compress(normalised_height_map, compression_factor)
