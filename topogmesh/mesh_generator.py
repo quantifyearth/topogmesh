@@ -1,6 +1,6 @@
 import numpy as np
 from .hm_utils import compress, normalise, read_full_layer, apply_mask
-from .geo_utils import to_utm
+from .geo_utils import raster_to_utm, shape_to_utm
 from .mesh import Mesh, Vertex, Triangle
 import yirgacheffe as yg
 
@@ -151,9 +151,9 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], max_height: float,
         A Mesh object representing the extracted terrain.
     """
     group_rasters = yg.read_rasters(tif_paths)
-    utm_rasters = to_utm(group_rasters)
+    utm_rasters = raster_to_utm(group_rasters)
 
-    polygon_layer = yg.read_shape_like(shp_path, utm_rasters)
+    polygon_layer = shape_to_utm(utm_rasters, shp_path)
     masked_rasters = apply_mask(utm_rasters, polygon_layer)
 
     height_map = read_full_layer(masked_rasters)
