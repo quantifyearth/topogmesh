@@ -44,7 +44,7 @@ def compress(height_map: np.ndarray, scale: float) -> np.ndarray:
     return compressed_height_map
 
 
-def read_full_layer(raster: RasterLayer, dtype: type = float) -> RasterLayer:
+def read_full_layer(raster: RasterLayer, dtype: type = float) -> np.ndarray:
     """
     Return the entire contents of a RasterLayer based on the specifications 
     of its window.
@@ -70,11 +70,51 @@ def read_full_layer(raster: RasterLayer, dtype: type = float) -> RasterLayer:
     return array
 
 def normalise(height_map: np.ndarray, base_height: float, max_height: float):
+    """
+    Normalize a height map to a fixed range.
+
+    Shifts the height map so that its minimum value becomes ``base_height``, 
+    then scales all values proportionally so that the maximum value becomes 
+    ``max_height``.
+
+    Parameters
+    ----------
+    height_map : np.ndarray
+        Input 2D array representing the height map. Can contain NaN values.
+    base_height : float
+        The baseline height to which the minimum of the height map is shifted.
+    max_height : float
+        The maximum value after normalization.
+
+    Returns
+    -------
+    np.ndarray
+        Normalized height map with values scaled to the range 
+        [base_height, max_height].
+    """
     zeroed_height_map = height_map + base_height - np.nanmin(height_map)
     normalised_height_map = zeroed_height_map / np.nanmax(zeroed_height_map) * max_height
     return normalised_height_map
 
 def apply_mask(raster: RasterLayer, mask: VectorLayer, mask_with_nans: bool = True) -> RasterLayer:
+    """
+    Apply a yirgacheffe VectorLayer as a mask to a RasterLayer and returns
+    the result as a new RasterLayer.
+
+    Parameters
+    ----------
+    raster : RasterLayer
+        The layer which the mask is applied to.
+    mask : VectorLayer
+        The mask being applied to the raster.
+    mask_with_nans : bool
+        Sets values outside the polygon to NaN if True, otherwise to 0.
+
+    Returns
+    -------
+    RaterLayer
+        The resultant masked RasterLayer
+    """
     if mask_with_nans:
         mask = yo.where(mask == 0, np.nan, mask)
 

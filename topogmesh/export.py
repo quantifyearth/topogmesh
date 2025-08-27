@@ -2,17 +2,17 @@ import lib3mf
 from lib3mf import get_wrapper
 from .mesh import Mesh
 
-def export_mesh_to_3mf(mesh: Mesh, output_path: str) -> None:
+def export_mesh_to_3mf(mesh: list[Mesh] | Mesh, output_path: str) -> None:
     """
-    Export a Mesh object to a 3MF file.
+    Export a Mesh or list of Mesh objects to a 3MF file.
 
     Creates a 3MF model using lib3mf, adds the mesh vertices and triangles,
     and writes the file to disk.
 
     Parameters
     ----------
-    mesh : Mesh
-        The mesh to export.
+    mesh : list[Mesh] | Mesh
+        The mesh or meshes to export.
     output_path : str
         Path to the output .3mf file.
 
@@ -20,27 +20,35 @@ def export_mesh_to_3mf(mesh: Mesh, output_path: str) -> None:
     -------
     None
     """
+
+    if isinstance(mesh, Mesh):
+        meshes = [mesh]
+    else:
+        meshes = mesh
+
     wrapper = get_wrapper()
     model = wrapper.CreateModel()
-    mesh_obj = model.AddMeshObject()
-    mesh_obj.SetName("MeshModel")
 
-    # Add vertices
-    for vert in mesh.vertices:
-        pos = lib3mf.Position()
-        pos.Coordinates[0], pos.Coordinates[1], pos.Coordinates[2] = vert.x, vert.y, vert.z
-        mesh_obj.AddVertex(pos)
+    comp_obj = model.AddComponentsObject()
+    comp_obj.SetName("CompositeObject")
 
-    # Add triangles
-    for tri in mesh.triangles:
-        t = lib3mf.Triangle()
-        t.Indices[0], t.Indices[1], t.Indices[2] = (tri.v1, tri.v2, tri.v3)
-        mesh_obj.AddTriangle(t)
+    for i, mesh in enumerate(meshes):
+        mesh_obj = model.AddMeshObject()
+        mesh_obj.SetName(f"MeshModel_{i}")
 
-    # Create build item
-    model.AddBuildItem(mesh_obj, wrapper.GetIdentityTransform())
+        for vert in mesh.vertices:
+            pos = lib3mf.Position()
+            pos.Coordinates[:] = vert.x, vert.y, vert.z
+            mesh_obj.AddVertex(pos)
 
-    # Write to file
+        for tri in mesh.triangles:
+            t = lib3mf.Triangle()
+            t.Indices[:] = tri.v1, tri.v2, tri.v3
+            mesh_obj.AddTriangle(t)
+
+        comp_obj.AddComponent(mesh_obj, wrapper.GetIdentityTransform())
+
+    model.AddBuildItem(comp_obj, wrapper.GetIdentityTransform())
+
     writer = model.QueryWriter("3mf")
     writer.WriteToFile(output_path)
-    print("file saved")

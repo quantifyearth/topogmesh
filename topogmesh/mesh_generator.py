@@ -2,17 +2,21 @@ import numpy as np
 from .hm_utils import compress, normalise, read_full_layer, apply_mask
 from .geo_utils import raster_to_utm, shape_to_utm
 from .mesh import Mesh, Vertex, Triangle
+from webscraper import mask_from_osm_tags
 import yirgacheffe as yg
+import yirgacheffe.operators as yo
 
 
-def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
+def create_mesh(height_map: np.ndarray, scale: float = 1, base_map: np.ndarray | None = None) -> Mesh:
     """
     Generate a 3D mesh from a 2D height map.
 
     Parameters
     ----------
-    height_map : np.ndarray of shape (H, W)
+    height_map : np.ndarray
         2D array of height values. Use `np.nan` to mark areas outside the model.
+    base_map : np.ndarray optional
+        2D array of the height of the base of the mesh. Default is np.zeros.
     scale : float, optional
         Distance between adjacent vertices in model units. Default is 1.
 
@@ -22,6 +26,9 @@ def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
         A mesh object containing vertices and triangles representing the terrain,
         including a base and side walls.
     """
+    if base_map is None:
+        base_map = np.zeros_like(height_map)
+
     valid = ~np.isnan(height_map)
     x_size, y_size = height_map.shape
 
@@ -39,7 +46,7 @@ def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
     for i in range(x_size):
         for j in range(y_size):
             if valid[i, j]:
-                verts.append(Vertex(i * scale, j * scale, 0))
+                verts.append(Vertex(i * scale, j * scale, base_map[i, j]))
 
 
     tris = []
@@ -122,7 +129,12 @@ def create_mesh(height_map: np.ndarray, scale: float = 1) -> Mesh:
     return Mesh(verts, tris)
 
 
-def mesh_from_shape_file(shp_path: str, tif_paths: list[str], max_height: float, max_length: float, base_height: float = 1, compression_factor: float = 1) -> Mesh:
+def mesh_from_shape_file(shp_path: str, 
+                         tif_paths: list[str], 
+                         max_height: float, 
+                         max_length: float, 
+                         base_height: float = 1, 
+                         compression_factor: float = 1) -> Mesh:
     """
     Generate a 3D terrain mesh from a shapefile and one or more raster tiles.
 
@@ -164,6 +176,89 @@ def mesh_from_shape_file(shp_path: str, tif_paths: list[str], max_height: float,
     scale = max_length / max(compressed_height_map.shape)
 
     return create_mesh(compressed_height_map, scale)
+
+
+def mesh_from_uk_shape(shp_path: str, 
+                       fr_dsm_paths: list[str], 
+                       dtm_paths: list[str],
+                       max_length: float,
+                       osm_tags: list[dict],
+                       base_height: float = 1) -> list[Mesh]:
+    """
+    Generate a composite 3D mesh from UK terrain and OSM data.
+
+    Uses a Digital Terrain Model (DTM) as the base and adds layers based
+    on OpenStreetMap (OSM) tags to create detailed meshes representing
+    terrain and mapped features.
+
+    Parameters
+    ----------
+    shp_path : str
+        Path to the polygon shapefile defining the area of interest.
+    fr_dsm_paths : list[str]
+        Paths to the DSM (Digital Surface Model) raster files.
+    dtm_paths : list[str]
+        Paths to the DTM (Digital Terrain Model) raster files.
+    max_length : float
+        Maximum length (in units) to scale the mesh to.
+    osm_tags : list[dict]
+        List of OSM tag dictionaries to extract feature layers (e.g., buildings, vegetation).
+    base_height : float, optional
+        Baseline height to offset the terrain minimum. Defaults to 1.
+
+    Returns
+    -------
+    list[Mesh]
+        A list of Mesh objects representing the base terrain and additional
+        layers corresponding to OSM features.
+
+    Notes
+    -----
+    - The DTM is normalized and scaled so that its largest dimension fits
+      within `max_length`.
+    - Each OSM tag layer is applied on top of the base terrain, masking
+      areas not matching the tag.
+    - NaN values in input rasters are treated as zero.
+    """
+    dsm_layer = yg.read_rasters(fr_dsm_paths)
+    dtm_layer = yg.read_rasters(dtm_paths)
+    polygon_layer = yg.read_shape_like(shp_path, like=dsm_layer)
+
+    # Remove NODATA holes
+    dsm_layer = yo.where(dsm_layer.isnan(), 0, dsm_layer)
+    dtm_layer = yo.where(dtm_layer.isnan(), 0, dtm_layer)
+
+    #Ensure dsm_layer is above dtm
+    dsm_layer = yo.where(dsm_layer < dtm_layer, dtm_layer, dsm_layer)
+
+    masked_dsm = apply_mask(dsm_layer, polygon_layer)
+    masked_dtm = apply_mask(dtm_layer, polygon_layer)
+
+    dtm = read_full_layer(masked_dtm)
+
+    Z_OFF = base_height - np.nanmin(dtm)
+    SCALE = max_length / max(dtm.shape)
+
+    normalised_dtm = (dtm + Z_OFF) * SCALE
+
+    composite_mesh = [create_mesh(normalised_dtm, scale=SCALE)]
+
+    unassigned_layer_mask = np.ones(dtm.shape, dtype=float)
+    for tags in osm_tags:
+        mask = mask_from_osm_tags(masked_dsm, tags)
+        if mask is not None:
+            next_layer = apply_mask(masked_dsm, mask)
+            height_map = read_full_layer(next_layer)
+
+            h, w = height_map.shape
+            filtered_height_map = height_map * unassigned_layer_mask[:h, :w]
+            unassigned_layer_mask[:h, :w] = np.where(np.isnan(height_map), unassigned_layer_mask[:h, :w], np.nan)
+
+            normalised_height_map = (filtered_height_map + Z_OFF) * SCALE
+            composite_mesh.append(create_mesh(normalised_height_map, base_map=normalised_dtm, scale=SCALE))
+
+    return composite_mesh
+
 
 def mesh_from_tif(tif_path: str, max_height: float, max_length: float, base_height: float = 1, compression_factor: float = 1) -> Mesh:
     raster = yg.read_raster(tif_path)
