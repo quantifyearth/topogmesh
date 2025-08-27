@@ -2,7 +2,7 @@ import numpy as np
 from .hm_utils import compress, normalise, read_full_layer, apply_mask
 from .geo_utils import raster_to_utm, shape_to_utm
 from .mesh import Mesh, Vertex, Triangle
-from webscraper import mask_from_osm_tags
+from .webscraper import mask_from_osm_tags
 import yirgacheffe as yg
 import yirgacheffe.operators as yo
 
