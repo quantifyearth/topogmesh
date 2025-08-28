@@ -119,7 +119,7 @@ def apply_mask(raster: RasterLayer, mask: VectorLayer, mask_with_nans: bool = Tr
         mask = yo.where(mask == 0, np.nan, mask)
 
     mask_operation = raster * mask
-    masked_raster = RasterLayer.empty_raster_layer_like(mask)
+    masked_raster = RasterLayer.empty_raster_layer_like(mask_operation)
     mask_operation.save(masked_raster)
 
     return masked_raster

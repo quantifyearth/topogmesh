@@ -1,6 +1,6 @@
 import numpy as np
 from .hm_utils import compress, normalise, read_full_layer, apply_mask
-from .geo_utils import raster_to_utm, shape_to_utm
+from .geo_utils import raster_to_utm, shape_to_utm, shape_to_epsg27700
 from .mesh import Mesh, Vertex, Triangle
 from .webscraper import mask_from_osm_tags
 import yirgacheffe as yg
@@ -222,14 +222,15 @@ def mesh_from_uk_shape(shp_path: str,
     """
     dsm_layer = yg.read_rasters(fr_dsm_paths)
     dtm_layer = yg.read_rasters(dtm_paths)
-    polygon_layer = yg.read_shape_like(shp_path, like=dsm_layer)
+    polygon_layer = shape_to_epsg27700(dsm_layer, shp_path)
 
     # Remove NODATA holes
     dsm_layer = yo.where(dsm_layer.isnan(), 0, dsm_layer)
     dtm_layer = yo.where(dtm_layer.isnan(), 0, dtm_layer)
 
     #Ensure dsm_layer is above dtm
-    dsm_layer = yo.where(dsm_layer < dtm_layer, dtm_layer, dsm_layer)
+    LAMINAR_HEIGHT = 1
+    dsm_layer = yo.where(dsm_layer < dtm_layer + LAMINAR_HEIGHT, dtm_layer + LAMINAR_HEIGHT, dsm_layer)
 
     masked_dsm = apply_mask(dsm_layer, polygon_layer)
     masked_dtm = apply_mask(dtm_layer, polygon_layer)
@@ -248,11 +249,16 @@ def mesh_from_uk_shape(shp_path: str,
         mask = mask_from_osm_tags(masked_dsm, tags)
         if mask is not None:
             next_layer = apply_mask(masked_dsm, mask)
+            next_layer.set_window_for_union(masked_dtm.area)
+
+            # Change once yirgacheffe pads with no data instead of 0
+            next_layer = yo.where(next_layer == 0, np.nan, next_layer)
+            next_layer = apply_mask(next_layer, polygon_layer)
+
             height_map = read_full_layer(next_layer)
 
-            h, w = height_map.shape
-            filtered_height_map = height_map * unassigned_layer_mask[:h, :w]
-            unassigned_layer_mask[:h, :w] = np.where(np.isnan(height_map), unassigned_layer_mask[:h, :w], np.nan)
+            filtered_height_map = height_map * unassigned_layer_mask
+            unassigned_layer_mask = np.where(np.isnan(height_map), unassigned_layer_mask, np.nan)
 
             normalised_height_map = (filtered_height_map + Z_OFF) * SCALE
             composite_mesh.append(create_mesh(normalised_height_map, base_map=normalised_dtm, scale=SCALE))

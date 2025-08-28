@@ -9,12 +9,15 @@ def main():
     Provides three subcommands to generate 3D meshes:
     
     1. mesh_from_tif:
-       Generate a mesh from a single TIF file.
+        Generate a mesh from a single TIF file.
     2. mesh_from_shape_file:
-       Generate a mesh from a shapefile and one or more TIF files.
+        Generate a mesh from a shapefile and one or more TIF files.
     3. mesh_from_uk_shape_file:
-       Generate a mesh from a shapefile and multiple DSM/DTM TIFs,
-       adding layers based on OSM tags.
+        Generate a mesh from a shapefile and multiple DSM/DTM TIFs,
+        adding layers based on OSM tags.
+    4. download_tiles_for_uk_shape:
+        Scrapes the dsm and dtm tiles off https://environment.data.gov.uk/survey
+        which are required to cover the provided geojson file.
     """
     parser = argparse.ArgumentParser(prog="topogmesh", description="Generate 3MF terrain meshes")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -50,6 +53,14 @@ def main():
     uk_shape_parser.add_argument("--max-length", required=True, type=float)
     uk_shape_parser.add_argument("--base-height", type=float, default=1)
     uk_shape_parser.add_argument("--osm-tags", required=True, nargs='+', help="List of OSM tag dictionaries in JSON format")
+
+    # Command: download_tiles_for_uk_shape
+    download_tiles_parser = subparsers.add_parser(
+        "download_tiles_for_uk_shape", 
+        help="Scrapes the dsm and dtm tiles off https://environment.data.gov.uk/survey for a given geojson file."
+    )
+    download_tiles_parser.add_argument("--geojson", required=True, help="Path to the input GeoJSON file defining the area of interest.")
+    download_tiles_parser.add_argument("--output-dir", required=True, help="Directory where downloaded tiles will be saved.")
 
     args = parser.parse_args()
 
@@ -88,6 +99,13 @@ def main():
         )
         topogmesh.export_mesh_to_3mf(meshes, args.output)
         print(f"Mesh saved to {args.output}")
+
+    elif  args.command == "download_tiles_for_uk_shape":
+        topogmesh.get_uk_tiles(
+            args.geojson, 
+            args.output_dir
+        )
+
 
 if __name__ == "__main__":
     main()
