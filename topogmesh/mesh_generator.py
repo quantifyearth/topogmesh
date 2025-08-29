@@ -1,6 +1,6 @@
 import numpy as np
-from .hm_utils import compress, normalise, read_full_layer, apply_mask
-from .geo_utils import raster_to_utm, shape_to_utm, shape_to_epsg27700
+from .hm_utils import read_full_layer, apply_mask
+from .geo_utils import raster_to_utm, shape_to_utm
 from .mesh import Mesh, Vertex, Triangle
 from .webscraper import mask_from_osm_tags
 import yirgacheffe as yg
@@ -134,7 +134,8 @@ def mesh_from_shape_file(shp_path: str,
                          max_height: float, 
                          max_length: float, 
                          base_height: float = 1, 
-                         compression_factor: float = 1) -> Mesh:
+                         osm_tags: list[dict] = []
+                         ) -> Mesh:
     """
     Generate a 3D terrain mesh from a shapefile and one or more raster tiles.
 
@@ -162,6 +163,8 @@ def mesh_from_shape_file(shp_path: str,
     Mesh
         A Mesh object representing the extracted terrain.
     """
+    LAMINAR_HEIGHT = 1
+    
     group_rasters = yg.read_rasters(tif_paths)
     utm_rasters = raster_to_utm(group_rasters)
 
@@ -170,19 +173,48 @@ def mesh_from_shape_file(shp_path: str,
 
     height_map = read_full_layer(masked_rasters)
 
-    normalised_height_map = normalise(height_map, base_height, max_height)
-    compressed_height_map = compress(normalised_height_map, compression_factor)
-    
-    scale = max_length / max(compressed_height_map.shape)
+    Z_OFF = base_height - np.nanmin(height_map)
+    MAX_HEIGHT = np.nanmax(height_map) + Z_OFF
+    SCALE = max_length / max(height_map.shape)
+    def normalise(height_map):
+        zeroed_height_map = height_map + Z_OFF
+        normalised_height_map = zeroed_height_map / MAX_HEIGHT * max_height
+        return normalised_height_map
 
-    return create_mesh(compressed_height_map, scale)
+    normalised_height_map = normalise(height_map)
+    composite_mesh = [create_mesh(normalised_height_map, SCALE)]
+
+    unassigned_layer_mask = np.ones(normalised_height_map.shape, dtype=float)
+    for tags in osm_tags:
+        mask = mask_from_osm_tags(masked_rasters, tags)
+        if mask is not None:
+            next_layer = apply_mask(masked_rasters, mask)
+            next_layer.set_window_for_union(masked_rasters.area)
+
+            # Change once yirgacheffe pads with no data instead of 0
+            next_layer = yo.where(next_layer == 0, np.nan, next_layer)
+            next_layer = apply_mask(next_layer, polygon_layer)
+
+            layer_height_map = read_full_layer(next_layer)
+
+            filtered_height_map = layer_height_map * unassigned_layer_mask
+            unassigned_layer_mask = np.where(np.isnan(layer_height_map), unassigned_layer_mask, np.nan)
+
+            next_mesh = create_mesh(
+                normalise(filtered_height_map) + LAMINAR_HEIGHT,
+                base_map=normalised_height_map, 
+                scale=SCALE
+            )
+            composite_mesh.append(next_mesh)
+
+    return composite_mesh
 
 
 def mesh_from_uk_shape(shp_path: str, 
                        fr_dsm_paths: list[str], 
                        dtm_paths: list[str],
                        max_length: float,
-                       osm_tags: list[dict],
+                       osm_tags: list[dict] = [],
                        base_height: float = 1) -> list[Mesh]:
     """
     Generate a composite 3D mesh from UK terrain and OSM data.
@@ -222,7 +254,7 @@ def mesh_from_uk_shape(shp_path: str,
     """
     dsm_layer = yg.read_rasters(fr_dsm_paths)
     dtm_layer = yg.read_rasters(dtm_paths)
-    polygon_layer = shape_to_epsg27700(dsm_layer, shp_path)
+    polygon_layer = shape_to_utm(dsm_layer, shp_path)
 
     # Remove NODATA holes
     dsm_layer = yo.where(dsm_layer.isnan(), 0, dsm_layer)
@@ -266,14 +298,14 @@ def mesh_from_uk_shape(shp_path: str,
     return composite_mesh
 
 
-def mesh_from_tif(tif_path: str, max_height: float, max_length: float, base_height: float = 1, compression_factor: float = 1) -> Mesh:
+def mesh_from_tif(tif_path: str, max_height: float, max_length: float, base_height: float = 1) -> Mesh:
     raster = yg.read_raster(tif_path)
 
     height_map = read_full_layer(raster)
 
-    normalised_height_map = normalise(height_map, base_height, max_height)
-    compressed_height_map = compress(normalised_height_map, compression_factor)
+    zeroed_height_map = height_map + base_height - np.nanmin(height_map)
+    normalised_height_map = zeroed_height_map / np.nanmax(zeroed_height_map) * max_height
 
-    scale = max_length / max(compressed_height_map.shape)
+    scale = max_length / max(normalised_height_map.shape)
 
-    return create_mesh(compressed_height_map, scale)
+    return create_mesh(normalised_height_map, scale)

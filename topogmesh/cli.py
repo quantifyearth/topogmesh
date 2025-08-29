@@ -29,7 +29,6 @@ def main():
     tif_parser.add_argument("--max-length", required=True, type=float)
     tif_parser.add_argument("--max-height", required=True, type=float)
     tif_parser.add_argument("--base-height", type=float, default=1)
-    tif_parser.add_argument("--compression-factor", type=float, default=1)
 
     # Command: mesh_from_shape_file
     shape_parser = subparsers.add_parser("mesh_from_shape_file", help="Generate mesh from a geojson file and multiple TIFs")
@@ -39,7 +38,7 @@ def main():
     shape_parser.add_argument("--max-length", required=True, type=float)
     shape_parser.add_argument("--max-height", required=True, type=float)
     shape_parser.add_argument("--base-height", type=float, default=1)
-    shape_parser.add_argument("--compression-factor", type=float, default=1)
+    shape_parser.add_argument("--osm-tags", default=[], nargs='*', help="List of OSM tag dictionaries in JSON format")
 
     # Command: mesh_from_uk_shape
     uk_shape_parser = subparsers.add_parser(
@@ -52,7 +51,7 @@ def main():
     uk_shape_parser.add_argument("--output", required=True, help="Output .3mf file path")
     uk_shape_parser.add_argument("--max-length", required=True, type=float)
     uk_shape_parser.add_argument("--base-height", type=float, default=1)
-    uk_shape_parser.add_argument("--osm-tags", required=True, nargs='+', help="List of OSM tag dictionaries in JSON format")
+    uk_shape_parser.add_argument("--osm-tags", default=[], nargs='*', help="List of OSM tag dictionaries in JSON format")
 
     # Command: download_tiles_for_uk_shape
     download_tiles_parser = subparsers.add_parser(
@@ -70,19 +69,19 @@ def main():
             base_height=args.base_height,
             max_length=args.max_length,
             max_height=args.max_height,
-            compression_factor=args.compression_factor
         )
         topogmesh.export_mesh_to_3mf(mesh, args.output)
         print(f"Mesh saved to {args.output}")
 
     elif args.command == "mesh_from_shape_file":
+        osm_tags = [json.loads(tag) for tag in args.osm_tags]
         mesh = topogmesh.mesh_from_shape_file(
             shp_path=args.shape,
             tif_paths=args.tifs,
             max_length=args.max_length,
             max_height=args.max_height,
             base_height=args.base_height,
-            compression_factor=args.compression_factor
+            osm_tags=osm_tags,
         )
         topogmesh.export_mesh_to_3mf(mesh, args.output)
         print(f"Mesh saved to {args.output}")

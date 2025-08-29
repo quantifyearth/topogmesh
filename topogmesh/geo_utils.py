@@ -1,6 +1,7 @@
 import tempfile
 from osgeo import gdal, osr, ogr
 from yirgacheffe.layers import RasterLayer, VectorLayer
+from pyproj import Transformer, CRS
 import yirgacheffe as yg
 import os
 import geopandas as gpd
@@ -44,24 +45,10 @@ def raster_to_utm(input_raster: RasterLayer) -> RasterLayer:
     return warped_raster
 
 def shape_to_utm(reference_layer: RasterLayer, shape_path: str) -> VectorLayer:
-    raster_srs = osr.SpatialReference()
-    raster_srs.ImportFromWkt(reference_layer.map_projection.name)
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp_path = os.path.join(tmpdir, "out.geojson")
-        
-        gdal.VectorTranslate(
-            tmp_path,
-            shape_path,
-            dstSRS=raster_srs.ExportToWkt()
-        )
-
-        return yg.read_shape_like(tmp_path, like=reference_layer)
-
-def shape_to_epsg27700(reference_layer: RasterLayer, shape_path: str) -> VectorLayer:
-    with tempfile.NamedTemporaryFile(suffix='.tif', delete=True) as tmpfile:
+    src_crs = CRS.from_wkt(reference_layer.map_projection.name)
+    with tempfile.NamedTemporaryFile(suffix='.geojson', delete=True) as tmpfile:
         gdf = gpd.read_file(shape_path)
-        gdf = gdf.to_crs("EPSG:27700")
+        gdf = gdf.to_crs(src_crs)
         gdf.to_file(tmpfile.name, driver="GeoJSON")
         
         return yg.read_shape_like(tmpfile.name, like=reference_layer)

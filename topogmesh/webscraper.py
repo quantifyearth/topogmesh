@@ -1,9 +1,9 @@
 from shapely.geometry import box
 import osmnx as ox
 from osmnx._errors import InsufficientResponseError
-from yirgacheffe.layers import RasterLayer, VectorLayer, GroupLayer
+from yirgacheffe.layers import RasterLayer, VectorLayer
 import yirgacheffe as yg
-from pyproj import Transformer
+from pyproj import Transformer, CRS
 import tempfile
 import requests
 import zipfile
@@ -19,7 +19,9 @@ def mask_from_osm_tags(reference_layer: RasterLayer, tags: dict) -> VectorLayer:
     y_min = reference_layer.area.bottom
     y_max = reference_layer.area.top
 
-    transformer = Transformer.from_crs(27700, 4326, always_xy=True)
+    src_crs = CRS.from_wkt(reference_layer.map_projection.name)
+    transformer = Transformer.from_crs(src_crs, 4326, always_xy=True)
+
     lon_min, lat_min = transformer.transform(x_min, y_min)
     lon_max, lat_max = transformer.transform(x_max, y_max)
 
@@ -31,13 +33,14 @@ def mask_from_osm_tags(reference_layer: RasterLayer, tags: dict) -> VectorLayer:
     except InsufficientResponseError:
         return None
 
-    projected_gdf = gdf.to_crs(epsg=27700)
+    projected_gdf = gdf.to_crs(src_crs)
     clipped_gdf = projected_gdf.clip(poly_xy)
     with tempfile.NamedTemporaryFile(suffix=".geojson", delete=True) as tmp:
         temp_geojson_path = tmp.name
         clipped_gdf.to_file(temp_geojson_path, driver="GeoJSON")
         osm_tags_layer = yg.read_shape_like(temp_geojson_path, like=reference_layer)
     return osm_tags_layer
+
 
 def get_lidar_layer(base_url: str, output_path: str) -> None:
     print(f"Downloading {base_url}")
