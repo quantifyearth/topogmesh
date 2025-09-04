@@ -149,14 +149,13 @@ def mesh_from_shape_file(shp_path: str,
         Path to the input shapefile (.geojson) containing the polygon boundary.
     tif_paths : list of str
         List of paths to GeoTIFF (.tif) raster files containing elevation data.
-    base_height : float
+    base_height : float, optional
         The base level of the mesh in mm. The lowest elevation in the
         polygon will be shifted so that its minimum is at this value.
-    scale : float, optional
-        Distance between adjacent vertices in model units. Default is 1.
-    compression_factor : float, optional
-        Factor to scale the number of vertices. For example, 0.5 halves the number
-        of pixels in each dimension.
+        Defaults to 1.
+    osm_tags : list[dict]
+        List of OSM tag dictionaries to extract feature layers (e.g., buildings,
+        vegetation). Defaults to `[]`.
 
     Returns
     -------
@@ -299,6 +298,25 @@ def mesh_from_uk_shape(shp_path: str,
 
 
 def mesh_from_tif(tif_path: str, max_height: float, max_length: float, base_height: float = 1) -> Mesh:
+    """
+    Generate a 3D mesh from a raster height map stored in a GeoTIFF file.
+
+    Parameters
+    ----------
+    tif_path : str
+        Path to the input GeoTIFF file containing elevation data.
+    max_height : float
+        Maximum height of the model in mm.
+    max_length : float
+        Maximum horizontal extent (largest side) of the model in mm.
+    base_height : float, optional
+        Height of the lowest point on the model in mm.
+
+    Returns
+    -------
+    Mesh
+        A mesh object created from the normalized height map.
+    """
     raster = yg.read_raster(tif_path)
 
     height_map = read_full_layer(raster)

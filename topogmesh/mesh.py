@@ -41,19 +41,6 @@ class Vertex:
     def __repr__(self):
         return f"Vertex(v1: {self.x}, v2: {self.y}, v3: {self.z})"
     
-    def scale(self, factor: float):
-        """
-        Scale the vertex coordinates by a given factor.
-
-        Parameters
-        ----------
-        factor : float
-            The scaling factor to multiply each coordinate by.
-        """
-        self.x *= factor
-        self.y *= factor
-        self.z *= factor
-    
 class Mesh:
     """
     Represents a 3D mesh composed of vertices and triangles with spatial dimensions.
@@ -73,13 +60,6 @@ class Mesh:
         Read-only property to access the list of vertices.
     triangles : list of Triangle
         Read-only property to access the list of triangles.
-
-    Methods
-    -------
-    scale_height(factor: float)
-        Scale the height (z-coordinate) of all vertices by the given factor.
-    scale(factor: float)
-        Scale all vertex coordinates and update mesh dimensions by the factor.
     """
     def __init__(self, vertices: list[Vertex], triangles: list[Triangle]):
         self._vertices = vertices
@@ -88,16 +68,6 @@ class Mesh:
     def __repr__(self):
         return f"Mesh(Vertices: {self._vertices}, Triangles: {self._triangles})"
     
-    def scale_height(self, factor: float):
-        for vertex in self._vertices:
-            vertex.z *= factor
-
-    def scale(self, factor: float):
-        for vertex in self._vertices:
-            vertex.scale(factor)
-        width, height = self._dimensions
-        self._dimensions = (width * factor, height * factor)
-
     @property
     def vertices(self):
         return self._vertices

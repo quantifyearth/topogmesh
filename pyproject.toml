@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "topogmesh"
-version = "0.1.6"
+version = "0.1.7"
 description = "Generate 3D print files from .tif files"
 authors = [
     { name = "Finley Stirk", email = "fs618@cam.ac.uk" }
@@ -18,7 +18,9 @@ dependencies = [
     "numpy",
     "gdal",
     "yirgacheffe",
-    "scikit-image"
+    "scikit-image",
+    "osmnx",
+    "requests"
 ]
 
 classifiers = [

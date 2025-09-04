@@ -14,6 +14,30 @@ from pathlib import Path
 ox.settings.use_cache = False
 
 def mask_from_osm_tags(reference_layer: RasterLayer, tags: dict) -> VectorLayer:
+    """
+    Generate a vector mask from OpenStreetMap features within the extent of a raster.
+
+    The function queries OSM data for features matching the given tags inside the
+    bounding box of the `reference_layer`. The resulting features are reprojected
+    to match the raster's CRS, clipped to its exact extent, and returned as a
+    vector layer aligned with the raster.
+
+    Parameters
+    ----------
+    reference_layer : RasterLayer
+        A raster layer defining the spatial extent and coordinate reference system
+        (CRS) to query and align the OSM features with.
+    tags : dict
+        Dictionary of OSM tags to filter features by. Keys are OSM keys
+        and values are either strings or lists of acceptable tag values.
+        (e.g., `[{'natural' : 'water'}, {'building' : ['public', 'palace']}]`), 
+
+    Returns
+    -------
+    VectorLayer or None
+        A vector layer containing the OSM features clipped to the raster extent.
+        Returns None if no features are retrieved due to insufficient OSM response.
+    """
     x_min = reference_layer.area.left
     x_max = reference_layer.area.right
     y_min = reference_layer.area.bottom
@@ -43,6 +67,25 @@ def mask_from_osm_tags(reference_layer: RasterLayer, tags: dict) -> VectorLayer:
 
 
 def get_lidar_layer(base_url: str, output_path: str) -> None:
+    """
+    Download and extract a LiDAR GeoTIFF from the UK Environment Agency Survey service.
+
+    The function appends the public subscription key to the provided dataset URL,
+    downloads the ZIP archive, extracts the first `.tif` file inside, and saves
+    it to the given output path.
+
+    Parameters
+    ----------
+    base_url : str
+        The base URL of the LiDAR dataset from
+        https://environment.data.gov.uk/survey (without subscription key).
+    output_path : str
+        Local file path where the extracted GeoTIFF will be written.
+
+    Returns
+    -------
+    None
+    """
     print(f"Downloading {base_url}")
     KEY = "?subscription-key=public"
     url = f"{base_url}{KEY}"
@@ -55,6 +98,26 @@ def get_lidar_layer(base_url: str, output_path: str) -> None:
                 tif.write(tif_data.read())
 
 def get_uk_tiles(shape_path: str, output_dir: Path) -> None:
+    """
+    Query and download UK Environment Agency LiDAR tiles that intersect a given area.
+
+    The function takes a polygon or multipolygon geometry (provided as a geojson
+    file), reprojects it to British National Grid (EPSG:27700), and submits it
+    to the Environment Agency survey tile search API. It retrieves the most recent
+    matching LiDAR tiles, and downloads them into the specified output directory.
+
+    Parameters
+    ----------
+    shape_path : str
+        Path to a geojson file defining the region of interest.
+    output_dir : Path
+        Directory where downloaded LiDAR tiles will be saved. Subdirectories
+        are created for each product type.
+
+    Returns
+    -------
+    None
+    """
     URL = "https://environment.data.gov.uk/backend/catalog/api/tiles/collections/survey/search"
     
     with tempfile.TemporaryDirectory() as tmpdir:

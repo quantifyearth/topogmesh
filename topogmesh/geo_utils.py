@@ -1,12 +1,29 @@
 import tempfile
 from osgeo import gdal, osr, ogr
 from yirgacheffe.layers import RasterLayer, VectorLayer
-from pyproj import Transformer, CRS
+from pyproj import CRS
 import yirgacheffe as yg
-import os
 import geopandas as gpd
 
 def raster_to_utm(input_raster: RasterLayer) -> RasterLayer:
+    """
+    Reproject a raster to its appropriate UTM zone.
+
+    The function determines the UTM zone of the raster by calculating the
+    geographic coordinates of its center. It then reprojects the raster into
+    that UTM zone using GDAL's warp functionality, returning a new raster
+    aligned to WGS84/UTM.
+
+    Parameters
+    ----------
+    input_raster : RasterLayer
+        Input raster layer with a defined spatial reference system.
+
+    Returns
+    -------
+    RasterLayer
+        A copy of the input raster reprojected to the correct UTM zone.
+    """
     with tempfile.NamedTemporaryFile(suffix='.tif', delete=True) as tmpfile:
         input_raster.to_geotiff(tmpfile.name)
         ds = gdal.Open(tmpfile.name)
@@ -45,6 +62,26 @@ def raster_to_utm(input_raster: RasterLayer) -> RasterLayer:
     return warped_raster
 
 def shape_to_utm(reference_layer: RasterLayer, shape_path: str) -> VectorLayer:
+    """
+    Reproject a vector shape to match the CRS of a reference raster layer.
+
+    The function reads a vector file, transforms its geometries to the same
+    coordinate reference system (CRS) as the provided raster layer, and returns
+    a new vector layer aligned with the raster.
+
+    Parameters
+    ----------
+    reference_layer : RasterLayer
+        Raster layer whose CRS will be used as the target CRS for the vector.
+    shape_path : str
+        Path to the input vector file (e.g., Shapefile, GeoJSON) to be reprojected.
+
+    Returns
+    -------
+    VectorLayer
+        A vector layer with geometries transformed to the raster's CRS and
+        compatible for use with operations on the reference raster.
+    """
     src_crs = CRS.from_wkt(reference_layer.map_projection.name)
     with tempfile.NamedTemporaryFile(suffix='.geojson', delete=True) as tmpfile:
         gdf = gpd.read_file(shape_path)
